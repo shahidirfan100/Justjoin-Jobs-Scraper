@@ -30,15 +30,6 @@
       "editor": "textfield",
       "example": "Warszawa"
     },
-    "cityRadiusKm": {
-      "title": "City Radius (km)",
-      "type": "integer",
-      "description": "Search radius in kilometers around the city.",
-      "editor": "number",
-      "minimum": 0,
-      "default": 30,
-      "prefill": 30
-    },
     "collectDetails": {
       "title": "Collect Full Job Details",
       "type": "boolean",
@@ -63,23 +54,6 @@
       "editor": "number",
       "default": 10,
       "prefill": 10
-    },
-    "pageSize": {
-      "title": "Items Per Page",
-      "type": "integer",
-      "description": "Number of job listings to fetch per API request (max 100).",
-      "minimum": 1,
-      "maximum": 100,
-      "default": 100,
-      "prefill": 100,
-      "editor": "number"
-    },
-    "employmentTypes": {
-      "title": "Employment Types",
-      "type": "array",
-      "description": "Employment type filters (e.g., 'b2b', 'permanent').",
-      "editor": "stringList",
-      "default": []
     },
     "proxyConfiguration": {
       "title": "Proxy Configuration",

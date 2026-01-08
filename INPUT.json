@@ -1,15 +1,13 @@
 {
-  "keywords": "react",
-  "city": "Warszawa",
-  "employmentTypes": [
-    "b2b"
-  ],
-  "startUrls": [
-    {
-      "url": "https://justjoin.it/job-offers/all-locations?orderBy=DESC&sortBy=newest&from=0&itemsCount=20"
-    }
-  ],
+  "keywords": "",
+  "city": "",
+  "employmentTypes": [],
+  "startUrls": [],
   "maxItems": 20,
-  "pageSize": 20,
-  "collectDetails": true
+  "maxPages": 5,
+  "pageSize": 25,
+  "collectDetails": true,
+  "proxyConfiguration": {
+    "useApifyProxy": false
+  }
 }

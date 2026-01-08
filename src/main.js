@@ -4,16 +4,30 @@ import { CheerioCrawler } from 'crawlee';
 import { load as cheerioLoad } from 'cheerio';
 import { gotScraping } from 'got-scraping';
 
-const API_BASE = 'https://justjoin.it/api/candidate-api';
+// ===== API ENDPOINTS =====
+// Primary: New V2 API for job listings (uses cursor-based pagination)
+const API_V2_BASE = 'https://api.justjoin.it/v2/user-panel/offers/by-cursor';
+// Secondary: Old candidate API for job details (still works for full descriptions)
+const API_DETAIL_BASE = 'https://justjoin.it/api/candidate-api/offers';
 const DEFAULT_LIST_URL = 'https://justjoin.it/job-offers/all-locations';
 
+// ===== STEALTH: User-Agent Rotation Pool =====
+const USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.3; rv:124.0) Gecko/20100101 Firefox/124.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36 Edg/130.0.0.0',
+];
+
+const getRandomUserAgent = () => USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const randomDelay = (min, max) => sleep(min + Math.random() * (max - min));
 
 const toInt = (value, fallback) => {
     const parsed = Number.parseInt(value, 10);
     return Number.isFinite(parsed) ? parsed : fallback;
 };
-
 
 const toArray = (value) => {
     if (Array.isArray(value)) return value.filter((item) => item !== null && item !== undefined && String(item).trim() !== '');
@@ -36,17 +50,15 @@ const cleanText = (html) => {
 
 const normalizeOrderBy = (value) => {
     const text = String(value || '').toLowerCase();
-    if (text.startsWith('asc')) return 'Ascending';
-    return 'Descending';
+    if (text.startsWith('asc')) return 'ASC';
+    return 'DESC';
 };
 
 const normalizeSortBy = (value) => {
     const text = String(value || '').toLowerCase();
     if (text === 'oldest') return 'oldest';
-    return 'newest';
+    return 'published'; // V2 API uses 'published' not 'newest'
 };
-
-const normalizeHtmlOrderBy = (value) => (normalizeOrderBy(value) === 'Ascending' ? 'ASC' : 'DESC');
 
 const mapSkills = (skills) => {
     if (!Array.isArray(skills)) return null;
@@ -71,7 +83,7 @@ const summarizeSalary = (employmentTypes) => {
     const unit = original.unit ? String(original.unit).toLowerCase() : null;
     if (from === null && to === null) return null;
     const range = from !== null && to !== null ? `${from} - ${to}` : `${from ?? to}`;
-    const suffix = currency ? ` ${currency}` : '';
+    const suffix = currency ? ` ${currency.toUpperCase()}` : '';
     const per = unit ? ` / ${unit}` : '';
     return `${range}${suffix}${per}`.trim();
 };
@@ -151,21 +163,6 @@ const extractJobUrlsFromHtml = ($) => {
     return [...urls];
 };
 
-const findNextListPage = ($, currentUrl, pageSize) => {
-    const meta = $('meta[name="next"]').attr('content');
-    if (meta) return meta;
-    try {
-        const url = new URL(currentUrl);
-        const from = toInt(url.searchParams.get('from'), 0);
-        const itemsCount = toInt(url.searchParams.get('itemsCount'), pageSize);
-        url.searchParams.set('from', String(from + itemsCount));
-        url.searchParams.set('itemsCount', String(itemsCount));
-        return url.href;
-    } catch {
-        return null;
-    }
-};
-
 await Actor.init();
 
 try {
@@ -180,13 +177,13 @@ try {
     const pageSize = Math.min(pageSizeRaw, 100);
     const collectDetails = input.collectDetails !== false;
     const maxConcurrency = 10;
-    const minDelayMs = 200;
+    const minDelayMs = 150;
+    const maxDelayMs = 400;
     const dedupe = true;
 
     const maxItems = maxItemsRaw > 0 ? maxItemsRaw : Number.POSITIVE_INFINITY;
     const sortBy = normalizeSortBy(input.sortBy);
     const orderBy = normalizeOrderBy(input.orderBy);
-    const htmlOrderBy = normalizeHtmlOrderBy(orderBy);
 
     const keywords = typeof input.keywords === 'string' && input.keywords.trim() ? input.keywords.trim() : null;
     const city = typeof input.city === 'string' && input.city.trim() ? input.city.trim() : null;
@@ -199,45 +196,89 @@ try {
     const employmentTypes = toCsv(input.employmentTypes);
     const currency = typeof input.currency === 'string' && input.currency.trim() ? input.currency.trim() : null;
 
+    // ===== STATE PERSISTENCE =====
+    const defaultState = { saved: 0, seen: [], cursor: null };
+    const persistedState = await Actor.getValue('STATE') || defaultState;
     const state = {
-        saved: 0,
-        seen: new Set(),
+        saved: persistedState.saved || 0,
+        seen: new Set(persistedState.seen || []),
+        cursor: persistedState.cursor || null,
     };
 
-    log.info(
-        `Run config: maxItems=${Number.isFinite(maxItems) ? maxItems : 'unlimited'}, maxPages=${maxPages}, pageSize=${pageSize}, collectDetails=${collectDetails}, sortBy=${sortBy}, orderBy=${orderBy}`
-    );
-
-    const requestJson = async (url) => {
-        const proxyUrl = proxyConfiguration ? await proxyConfiguration.newUrl() : undefined;
-        const response = await gotScraping({
-            url,
-            responseType: 'json',
-            timeout: { request: 30000 },
-            retry: { limit: 3 },
-            headers: { accept: 'application/json' },
-            proxyUrl,
+    const persistState = async () => {
+        await Actor.setValue('STATE', {
+            saved: state.saved,
+            seen: [...state.seen],
+            cursor: state.cursor,
         });
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-            throw new Error(`Request failed (${response.statusCode}) for ${url}`);
-        }
-        return response.body;
     };
 
-    const requestText = async (url) => {
+    Actor.on('migrating', persistState);
+    Actor.on('aborting', persistState);
+
+    log.info(`🚀 Starting JustJoin Scraper: maxItems=${Number.isFinite(maxItems) ? maxItems : 'unlimited'}, collectDetails=${collectDetails}`);
+
+    // ===== HTTP REQUEST HELPERS =====
+    const getHeaders = () => ({
+        'User-Agent': getRandomUserAgent(),
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9,pl;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Referer': 'https://justjoin.it/',
+        'Origin': 'https://justjoin.it',
+        'Connection': 'keep-alive',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-site',
+    });
+
+    const requestJson = async (url, retries = 3) => {
         const proxyUrl = proxyConfiguration ? await proxyConfiguration.newUrl() : undefined;
-        const response = await gotScraping({
-            url,
-            responseType: 'text',
-            timeout: { request: 30000 },
-            retry: { limit: 3 },
-            headers: { accept: 'text/html,application/xml' },
-            proxyUrl,
-        });
-        if (response.statusCode < 200 || response.statusCode >= 300) {
-            throw new Error(`Request failed (${response.statusCode}) for ${url}`);
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                const response = await gotScraping({
+                    url,
+                    responseType: 'json',
+                    timeout: { request: 30000 },
+                    headers: getHeaders(),
+                    proxyUrl,
+                    http2: true,
+                });
+                if (response.statusCode < 200 || response.statusCode >= 300) {
+                    throw new Error(`HTTP ${response.statusCode}`);
+                }
+                return response.body;
+            } catch (error) {
+                if (attempt === retries) throw error;
+                const waitTime = Math.min(1000 * Math.pow(2, attempt), 10000);
+                log.debug(`Retry ${attempt}/${retries} for ${url}, waiting ${waitTime}ms`);
+                await sleep(waitTime);
+            }
         }
-        return response.body;
+    };
+
+    const requestText = async (url, retries = 3) => {
+        const proxyUrl = proxyConfiguration ? await proxyConfiguration.newUrl() : undefined;
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                const response = await gotScraping({
+                    url,
+                    responseType: 'text',
+                    timeout: { request: 30000 },
+                    headers: { ...getHeaders(), 'Accept': 'text/html,application/xhtml+xml' },
+                    proxyUrl,
+                    http2: true,
+                });
+                if (response.statusCode < 200 || response.statusCode >= 300) {
+                    throw new Error(`HTTP ${response.statusCode}`);
+                }
+                return response.body;
+            } catch (error) {
+                if (attempt === retries) throw error;
+                const waitTime = Math.min(1000 * Math.pow(2, attempt), 10000);
+                await sleep(waitTime);
+            }
+        }
     };
 
     const sitemapCache = { urls: null };
@@ -254,7 +295,7 @@ try {
             const body = await requestText('https://justjoin.it/sitemap.xml');
             const urls = extractSitemapUrls(body);
             sitemapCache.urls = urls;
-            if (urls.length) log.info(`Sitemap fallback found ${urls.length} offers.`);
+            if (urls.length) log.info(`📍 Sitemap fallback found ${urls.length} offers.`);
             return urls;
         } catch (error) {
             log.warning(`Sitemap fallback failed: ${error.message}`);
@@ -328,14 +369,24 @@ try {
         if (!item || shouldSkip(item)) return;
         await Actor.pushData(item);
         state.saved += 1;
+        if (state.saved % 25 === 0) {
+            log.info(`📊 Progress: ${state.saved} jobs saved`);
+            await persistState();
+        }
     };
 
-    const fetchOffersPage = async (from, itemsCount) => {
-        const url = new URL(`${API_BASE}/offers`);
-        url.searchParams.set('from', String(from));
+    // ===== V2 API: Fetch offers page using cursor pagination =====
+    const fetchOffersPageV2 = async (cursor, itemsCount) => {
+        const url = new URL(API_V2_BASE);
         url.searchParams.set('itemsCount', String(itemsCount));
         url.searchParams.set('sortBy', sortBy);
         url.searchParams.set('orderBy', orderBy);
+
+        // Add cursor only if not first page
+        if (cursor !== null && cursor !== undefined) {
+            url.searchParams.set('cursor', String(cursor));
+        }
+
         if (keywords) url.searchParams.set('keywords', keywords);
         if (companyNames) url.searchParams.set('companyNames', companyNames);
         if (skills) url.searchParams.set('skills', skills);
@@ -346,41 +397,51 @@ try {
         if (experienceLevels) url.searchParams.set('experienceLevels', experienceLevels);
         if (employmentTypes) url.searchParams.set('employmentTypes', employmentTypes);
         if (currency) url.searchParams.set('currency', currency);
+
         return requestJson(url.href);
     };
 
+    // ===== Detail API: Fetch full job details using old candidate-api (still works!) =====
     const fetchOfferDetail = async (slug) => {
         if (!slug) return null;
-        const url = `${API_BASE}/offers/${slug}`;
+        const url = `${API_DETAIL_BASE}/${slug}`;
         try {
             const detail = await requestJson(url);
-            if (minDelayMs) await sleep(minDelayMs);
+            await randomDelay(minDelayMs, maxDelayMs);
             return detail;
         } catch (error) {
-            log.warning(`Detail fetch failed for ${slug}: ${error.message}`);
+            log.debug(`Detail fetch failed for ${slug}: ${error.message}`);
             return null;
         }
     };
 
+    // ===== PRIMARY: JSON API Scraper (V2 cursor-based) =====
     const runApiScraper = async () => {
-        log.info('Trying JSON API first.');
-        let from = 0;
+        log.info('🔌 Using V2 JSON API (cursor-based pagination)');
+        let cursor = state.cursor;
         let apiTouched = false;
+
         for (let page = 1; page <= maxPages && state.saved < maxItems; page += 1) {
             const remaining = Number.isFinite(maxItems) ? Math.max(0, maxItems - state.saved) : pageSize;
             const itemsCount = Number.isFinite(maxItems) ? Math.min(pageSize, remaining) : pageSize;
             if (itemsCount <= 0) break;
+
             let response;
             try {
-                response = await fetchOffersPage(from, itemsCount);
+                response = await fetchOffersPageV2(cursor, itemsCount);
                 apiTouched = true;
             } catch (error) {
-                log.warning(`API page failed (${page}): ${error.message}`);
+                log.warning(`❌ API page ${page} failed: ${error.message}`);
                 return apiTouched;
             }
 
             const offers = Array.isArray(response?.data) ? response.data : [];
-            if (!offers.length) break;
+            if (!offers.length) {
+                log.info(`📭 No more offers found at page ${page}`);
+                break;
+            }
+
+            log.info(`📦 Page ${page}: fetched ${offers.length} offers (total available: ${response?.meta?.totalItems || 'unknown'})`);
 
             const limitedOffers = Number.isFinite(maxItems) ? offers.slice(0, remaining) : offers;
             const items = collectDetails
@@ -395,34 +456,33 @@ try {
                 await pushItem(item);
             }
 
+            // V2 API: Use cursor from meta.next.cursor
             const nextCursor = response?.meta?.next?.cursor;
-            if (nextCursor === null || nextCursor === undefined) break;
-            from = toInt(nextCursor, from + offers.length);
+            if (nextCursor === null || nextCursor === undefined) {
+                log.info('📄 Reached last page (no next cursor)');
+                break;
+            }
+            cursor = nextCursor;
+            state.cursor = cursor;
 
-            if (minDelayMs) await sleep(minDelayMs);
+            await randomDelay(minDelayMs, maxDelayMs);
         }
         return apiTouched;
     };
 
+    // ===== FALLBACK: HTML Scraper with CheerioCrawler =====
     const runHtmlFallback = async () => {
-        log.warning('Falling back to HTML parsing.');
+        log.warning('⚠️ Falling back to HTML parsing');
         const startUrls = extractStartUrls(input);
         const baseUrl = startUrls.length ? startUrls[0] : DEFAULT_LIST_URL;
         const listUrl = (() => {
             try {
                 const url = new URL(baseUrl);
-                url.searchParams.set('orderBy', htmlOrderBy);
+                url.searchParams.set('orderBy', orderBy);
                 url.searchParams.set('sortBy', sortBy);
-                url.searchParams.set('from', url.searchParams.get('from') || '0');
-                url.searchParams.set('itemsCount', url.searchParams.get('itemsCount') || String(pageSize));
                 return url.href;
             } catch {
-                const url = new URL(DEFAULT_LIST_URL);
-                url.searchParams.set('orderBy', htmlOrderBy);
-                url.searchParams.set('sortBy', sortBy);
-                url.searchParams.set('from', '0');
-                url.searchParams.set('itemsCount', String(pageSize));
-                return url.href;
+                return DEFAULT_LIST_URL;
             }
         })();
 
@@ -457,11 +517,6 @@ try {
                             await pushItem({ url, source: 'justjoin.it' });
                         }
                     }
-
-                    if (state.saved < maxItems && pageNo < maxPages) {
-                        const next = findNextListPage($, request.url, pageSize);
-                        if (next) await enqueueLinks({ urls: [next], userData: { label: 'LIST', pageNo: pageNo + 1 } });
-                    }
                     return;
                 }
 
@@ -480,7 +535,7 @@ try {
                     }
 
                     const descriptionHtml = json?.description || null;
-                    const employmentTypes = json?.employmentType
+                    const empTypes = json?.employmentType
                         ? Array.isArray(json.employmentType)
                             ? json.employmentType
                             : [json.employmentType]
@@ -501,7 +556,7 @@ try {
                         location: null,
                         experience: null,
                         skills: null,
-                        employment_types: employmentTypes,
+                        employment_types: empTypes,
                         salary: json?.baseSalary?.value?.value || json?.baseSalary?.value?.minValue || null,
                         date_posted: json?.datePosted || null,
                         description_html: descriptionHtml,
@@ -518,10 +573,14 @@ try {
         await crawler.run([{ url: listUrl, userData: { label: 'LIST', pageNo: 1 } }]);
     };
 
+    // ===== RUN =====
     const apiSucceeded = await runApiScraper();
-    if (!apiSucceeded) await runHtmlFallback();
+    if (!apiSucceeded && state.saved === 0) {
+        await runHtmlFallback();
+    }
 
-    log.info(`Finished. Saved ${state.saved} items.`);
+    await persistState();
+    log.info(`✅ Finished. Saved ${state.saved} jobs.`);
     await Actor.exit();
 } catch (error) {
     log.exception(error);
