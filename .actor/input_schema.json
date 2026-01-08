@@ -1,0 +1,99 @@
+{
+  "title": "JustJoin Jobs Scraper",
+  "description": "Extract job listings from JustJoin.it. Supports filtering by keyword, location, employment type, and more.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "startUrls": {
+      "title": "Start URLs",
+      "type": "array",
+      "description": "JustJoin.it search URLs to scrape. If set, these will be processed via HTML fallback.",
+      "editor": "requestListSources",
+      "example": [
+        {
+          "url": "https://justjoin.it/all-locations/javascript"
+        }
+      ],
+      "default": []
+    },
+    "keywords": {
+      "title": "Search Keywords",
+      "type": "string",
+      "description": "Job title or skills to search (e.g., 'React', 'Python', 'Frontend').",
+      "editor": "textfield",
+      "example": "React"
+    },
+    "city": {
+      "title": "City",
+      "type": "string",
+      "description": "City to filter by (e.g., 'Warszawa', 'Kraków').",
+      "editor": "textfield",
+      "example": "Warszawa"
+    },
+    "cityRadiusKm": {
+      "title": "City Radius (km)",
+      "type": "integer",
+      "description": "Search radius in kilometers around the city.",
+      "editor": "number",
+      "minimum": 0,
+      "default": 30,
+      "prefill": 30
+    },
+    "collectDetails": {
+      "title": "Collect Full Job Details",
+      "type": "boolean",
+      "description": "Visit each job detail page to extract complete descriptions and additional information.",
+      "editor": "checkbox",
+      "default": true
+    },
+    "maxItems": {
+      "title": "Maximum Jobs to Extract",
+      "type": "integer",
+      "description": "Maximum number of job listings to collect.",
+      "minimum": 1,
+      "default": 100,
+      "prefill": 100,
+      "editor": "number"
+    },
+    "maxPages": {
+      "title": "Maximum Pages",
+      "type": "integer",
+      "description": "Maximum number of result pages to process.",
+      "minimum": 1,
+      "editor": "number",
+      "default": 10,
+      "prefill": 10
+    },
+    "pageSize": {
+      "title": "Items Per Page",
+      "type": "integer",
+      "description": "Number of job listings to fetch per API request (max 100).",
+      "minimum": 1,
+      "maximum": 100,
+      "default": 100,
+      "prefill": 100,
+      "editor": "number"
+    },
+    "employmentTypes": {
+      "title": "Employment Types",
+      "type": "array",
+      "description": "Employment type filters (e.g., 'b2b', 'permanent').",
+      "editor": "stringList",
+      "default": []
+    },
+    "proxyConfiguration": {
+      "title": "Proxy Configuration",
+      "type": "object",
+      "description": "Recommended: Use Apify Proxy to avoid blocking.",
+      "editor": "proxy",
+      "default": {
+        "useApifyProxy": true
+      },
+      "prefill": {
+        "useApifyProxy": true
+      }
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}
