@@ -1,47 +1,58 @@
-# JustJoin IT Jobs Scraper 🇵🇱
+# JustJoin IT Jobs Scraper
 
-Extract high-quality job listings from **JustJoin.it**, the premier job board for the tech industry in Poland. This powerful tool allows you to collect structured data for developer roles, engineering positions, and other IT vacancies with ease.
+Extract thousands of tech job listings from **JustJoin.it**, Poland's largest IT job board. Get structured data including job titles, salaries, required skills, company information, and full descriptions — ready for analysis, integration, or building your own job aggregator.
 
-## 🚀 Features
+## Why use this scraper?
 
-- **Direct Extraction**: Targeted data collection from official sources.
-- **Deep Data Retrieval**: Optionally visit job detail pages to extract full descriptions and application links.
-- **Smart Filtering**: Filter by keywords (React, Python, etc.), city (Warszawa, Kraków, etc.), and search radius.
-- **Employment Filters**: Support for B2B, Permanent, and other contract types.
-- **Automation Ready**: Use with Apify's API and Webhooks for automated job tracking.
-- **Stealthy & Reliable**: Built-in support for residential and datacenter proxies.
+JustJoin.it is the go-to platform for IT professionals in Poland, featuring positions from startups to Fortune 500 companies. This scraper enables you to:
 
-## 📥 Input Parameters
+- **Track market trends** — Monitor salary ranges across different technologies and cities
+- **Generate leads** — Find companies actively hiring for specific tech stacks
+- **Build job boards** — Aggregate listings for niche audiences or internal portals
+- **Research competitors** — Analyze hiring patterns of tech companies in Central Europe
 
-The scraper accepts the following configuration:
+## Features
 
-| Field | Type | Description | Default |
-|-------|------|-------------|---------|
-| `startUrls` | array | Specific JustJoin.it search URLs to scrape. | `[]` |
-| `keywords` | string | Search term for job title or skills (e.g., 'Frontend'). | `null` |
-| `city` | string | City to filter results (e.g., 'Warszawa'). | `null` |
-| `cityRadiusKm` | integer | Radius in km around the city search. | `30` |
-| `collectDetails` | boolean | Fetch full descriptions from detail pages. | `true` |
-| `maxItems` | integer | Limit the number of jobs collected. | `100` |
-| `maxPages` | integer | Maximum number of result pages to crawl. | `10` |
-| `pageSize` | integer | Number of items per request (max 100). | `100` |
-| `employmentTypes`| array | Filter by 'b2b', 'permanent', etc. | `[]` |
-| `proxyConfiguration`| object | Proxy settings (Residential recommended). | `{ "useApifyProxy": true }` |
+- **Smart filtering** — Search by keywords, city, and workplace preference
+- **Full job details** — Extract complete descriptions, requirements, and application links
+- **Salary data** — Get structured salary information with currency and payment frequency
+- **Skills extraction** — Collect required and nice-to-have technology skills
+- **Resume capability** — Automatically saves progress and resumes after interruptions
+- **Export flexibility** — Download results as JSON, CSV, Excel, or XML
 
-## 📤 Output Data
+## Input parameters
 
-The scraper provides structured results in formats like **JSON**, **CSV**, **Excel**, or **XML**. Each job listing includes fields such as:
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `keywords` | String | Search term for job titles or skills (e.g., "React", "Python") |
+| `city` | String | City name to filter results (e.g., "Warszawa", "Kraków") |
+| `workplaceTypes` | Array | Work location: `remote`, `hybrid`, `office` |
+| `collectDetails` | Boolean | Fetch full descriptions (default: true) |
+| `maxItems` | Integer | Maximum jobs to collect (default: 100) |
+| `maxPages` | Integer | Maximum result pages to process (default: 10) |
+| `proxyConfiguration` | Object | Proxy settings for reliability |
 
-- `title`: Job position title.
-- `company`: Name of the hiring company.
-- `location`: Location of the job (city).
-- `experience`: junior, mid, senior.
-- `salary`: Formatted salary string.
-- `skills`: List of required technology skills.
-- `date_posted`: Original posting date.
-- `url`: Direct link to the job offer.
+## Output data
 
-### Sample Output (JSON)
+Each job listing contains the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `title` | String | Job position title |
+| `company` | String | Hiring company name |
+| `location` | String | Primary job location |
+| `experience` | String | Required experience level |
+| `salary` | String | Formatted salary range (e.g., "15000 - 25000 PLN / month") |
+| `skills` | Array | Required technology skills |
+| `employment_types` | Array | Available contract types with salary details |
+| `workplace_type` | String | Remote, hybrid, or office |
+| `date_posted` | String | Original posting date |
+| `description_text` | String | Full job description (plain text) |
+| `description_html` | String | Full job description (HTML) |
+| `apply_url` | String | Direct application link |
+| `url` | String | Job listing URL |
+
+## Example output
 
 ```json
 {
@@ -49,26 +60,93 @@ The scraper provides structured results in formats like **JSON**, **CSV**, **Exc
   "company": "Tech Solutions Sp. z o.o.",
   "location": "Warszawa",
   "experience": "senior",
-  "salary": "25 000 - 32 000 PLN / month",
+  "salary": "25000 - 32000 PLN / month",
   "skills": ["React", "TypeScript", "Redux"],
+  "workplace_type": "hybrid",
+  "employment_types": [
+    {
+      "type": "b2b",
+      "from": 25000,
+      "to": 32000,
+      "currency": "pln"
+    }
+  ],
   "date_posted": "2026-01-08T10:00:00Z",
-  "url": "https://justjoin.it/offers/tech-solutions-senior-frontend-developer"
+  "description_text": "We are looking for an experienced frontend developer...",
+  "apply_url": "https://justjoin.it/job-offer/tech-solutions-senior-frontend-developer/apply",
+  "url": "https://justjoin.it/job-offer/tech-solutions-senior-frontend-developer"
 }
 ```
 
-## 💡 How to Use
+## Usage examples
 
-1. **Setup**: Provide a search keyword or a list of Start URLs.
-2. **Configure**: Set your limits (e.g., `maxItems: 50`) and detail collection preference.
-3. **Proxy**: Ensure Apify Proxy is enabled to maintain high success rates.
-4. **Run**: Execute the actor and download your data from the **Dataset** tab.
+### Collect React jobs in Warsaw
 
-## 🏆 SEO & Use Cases
+```json
+{
+  "keywords": "React",
+  "city": "Warszawa",
+  "maxItems": 200
+}
+```
 
-- **Market Analysis**: Track tech salary trends across different Polish cities.
-- **Lead Generation**: Identify companies hiring for specific technology stacks.
-- **Job Aggregation**: Build your own niche job board or internal career portal.
-- **Competitor Intelligence**: Monitor hiring patterns of top tech firms in Europe.
+### Find remote Python positions
+
+```json
+{
+  "keywords": "Python",
+  "workplaceTypes": ["remote"],
+  "maxItems": 100
+}
+```
+
+### Quick listing scan (no details)
+
+```json
+{
+  "maxItems": 500,
+  "collectDetails": false
+}
+```
+
+## Integrations
+
+Connect this scraper to your workflow using:
+
+- **Apify API** — Programmatic access to run the actor and fetch results
+- **Webhooks** — Get notified when new data is available
+- **Integrations** — Connect to Google Sheets, Slack, Zapier, Make, and more
+- **Scheduling** — Run daily or weekly to track new job postings
+
+## Tips for best results
+
+1. **Use Apify Proxy** — Enable residential proxies for higher success rates
+2. **Start with defaults** — Test with small batches before large extractions
+3. **Filter wisely** — Combine filters to get targeted, relevant results
+4. **Schedule runs** — Set up recurring runs to monitor new opportunities
+
+## Cost estimation
+
+The scraper is optimized for efficiency. Typical costs:
+
+| Jobs | Details | Estimated Cost |
+|------|---------|----------------|
+| 100 | Yes | ~$0.10 |
+| 500 | Yes | ~$0.40 |
+| 1000 | No | ~$0.20 |
+
+Actual costs depend on proxy usage and retry rates.
+
+## Legal and compliance
+
+This scraper is designed for legitimate data collection purposes such as market research, lead generation, and job aggregation. Users are responsible for ensuring their use complies with applicable laws and JustJoin.it's terms of service.
+
+## Support
+
+- **Issues?** Open a ticket in the Issues tab
+- **Questions?** Use the Discussion section
+- **Updates?** Star this actor to get notified of improvements
 
 ---
-*Note: This tool is intended for personal and professional data analysis. Always respect the source website's terms of service.*
+
+Built for recruiters, researchers, and developers who need reliable access to Poland's tech job market.

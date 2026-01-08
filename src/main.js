@@ -5,13 +5,11 @@ import { load as cheerioLoad } from 'cheerio';
 import { gotScraping } from 'got-scraping';
 
 // ===== API ENDPOINTS =====
-// Primary: New V2 API for job listings (uses cursor-based pagination)
 const API_V2_BASE = 'https://api.justjoin.it/v2/user-panel/offers/by-cursor';
-// Secondary: Old candidate API for job details (still works for full descriptions)
 const API_DETAIL_BASE = 'https://justjoin.it/api/candidate-api/offers';
 const DEFAULT_LIST_URL = 'https://justjoin.it/job-offers/all-locations';
 
-// ===== STEALTH: User-Agent Rotation Pool =====
+// ===== STEALTH: User-Agent Rotation =====
 const USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_3) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
@@ -46,18 +44,6 @@ const cleanText = (html) => {
     $('script, style, noscript, iframe').remove();
     const text = $.root().text().replace(/\s+/g, ' ').trim();
     return text || null;
-};
-
-const normalizeOrderBy = (value) => {
-    const text = String(value || '').toLowerCase();
-    if (text.startsWith('asc')) return 'ASC';
-    return 'DESC';
-};
-
-const normalizeSortBy = (value) => {
-    const text = String(value || '').toLowerCase();
-    if (text === 'oldest') return 'oldest';
-    return 'published'; // V2 API uses 'published' not 'newest'
 };
 
 const mapSkills = (skills) => {
@@ -171,30 +157,19 @@ try {
         ? await Actor.createProxyConfiguration({ ...input.proxyConfiguration })
         : undefined;
 
+    // ===== CONFIGURATION =====
     const maxItemsRaw = toInt(input.maxItems, 100);
     const maxPages = Math.max(1, toInt(input.maxPages, 10));
-    const pageSizeRaw = Math.max(1, toInt(input.pageSize, 100));
-    const pageSize = Math.min(pageSizeRaw, 100);
+    const pageSize = 100; // Fixed optimal page size
     const collectDetails = input.collectDetails !== false;
     const maxConcurrency = 10;
     const minDelayMs = 150;
     const maxDelayMs = 400;
-    const dedupe = true;
 
     const maxItems = maxItemsRaw > 0 ? maxItemsRaw : Number.POSITIVE_INFINITY;
-    const sortBy = normalizeSortBy(input.sortBy);
-    const orderBy = normalizeOrderBy(input.orderBy);
-
     const keywords = typeof input.keywords === 'string' && input.keywords.trim() ? input.keywords.trim() : null;
     const city = typeof input.city === 'string' && input.city.trim() ? input.city.trim() : null;
-    const cityRadiusKm = toInt(input.cityRadiusKm, city ? 30 : null);
-    const companyNames = toCsv(input.companyNames);
-    const skills = toCsv(input.skills);
-    const jobTitles = toCsv(input.jobTitles);
     const workplaceTypes = toCsv(input.workplaceTypes);
-    const experienceLevels = toCsv(input.experienceLevels);
-    const employmentTypes = toCsv(input.employmentTypes);
-    const currency = typeof input.currency === 'string' && input.currency.trim() ? input.currency.trim() : null;
 
     // ===== STATE PERSISTENCE =====
     const defaultState = { saved: 0, seen: [], cursor: null };
@@ -357,7 +332,6 @@ try {
     };
 
     const shouldSkip = (item) => {
-        if (!dedupe) return false;
         const key = item?.slug || item?.url;
         if (!key) return false;
         if (state.seen.has(key)) return true;
@@ -379,29 +353,21 @@ try {
     const fetchOffersPageV2 = async (cursor, itemsCount) => {
         const url = new URL(API_V2_BASE);
         url.searchParams.set('itemsCount', String(itemsCount));
-        url.searchParams.set('sortBy', sortBy);
-        url.searchParams.set('orderBy', orderBy);
+        url.searchParams.set('sortBy', 'published');
+        url.searchParams.set('orderBy', 'DESC');
 
-        // Add cursor only if not first page
         if (cursor !== null && cursor !== undefined) {
             url.searchParams.set('cursor', String(cursor));
         }
 
         if (keywords) url.searchParams.set('keywords', keywords);
-        if (companyNames) url.searchParams.set('companyNames', companyNames);
-        if (skills) url.searchParams.set('skills', skills);
-        if (jobTitles) url.searchParams.set('jobTitles', jobTitles);
         if (city) url.searchParams.set('city', city);
-        if (city && cityRadiusKm !== null) url.searchParams.set('cityRadiusKm', String(cityRadiusKm));
         if (workplaceTypes) url.searchParams.set('workplaceTypes', workplaceTypes);
-        if (experienceLevels) url.searchParams.set('experienceLevels', experienceLevels);
-        if (employmentTypes) url.searchParams.set('employmentTypes', employmentTypes);
-        if (currency) url.searchParams.set('currency', currency);
 
         return requestJson(url.href);
     };
 
-    // ===== Detail API: Fetch full job details using old candidate-api (still works!) =====
+    // ===== Detail API: Fetch full job details =====
     const fetchOfferDetail = async (slug) => {
         if (!slug) return null;
         const url = `${API_DETAIL_BASE}/${slug}`;
@@ -415,9 +381,9 @@ try {
         }
     };
 
-    // ===== PRIMARY: JSON API Scraper (V2 cursor-based) =====
+    // ===== PRIMARY: JSON API Scraper =====
     const runApiScraper = async () => {
-        log.info('🔌 Using V2 JSON API (cursor-based pagination)');
+        log.info('🔌 Using JSON API');
         let cursor = state.cursor;
         let apiTouched = false;
 
@@ -441,7 +407,7 @@ try {
                 break;
             }
 
-            log.info(`📦 Page ${page}: fetched ${offers.length} offers (total available: ${response?.meta?.totalItems || 'unknown'})`);
+            log.info(`📦 Page ${page}: fetched ${offers.length} offers (total: ${response?.meta?.totalItems || 'unknown'})`);
 
             const limitedOffers = Number.isFinite(maxItems) ? offers.slice(0, remaining) : offers;
             const items = collectDetails
@@ -456,10 +422,9 @@ try {
                 await pushItem(item);
             }
 
-            // V2 API: Use cursor from meta.next.cursor
             const nextCursor = response?.meta?.next?.cursor;
             if (nextCursor === null || nextCursor === undefined) {
-                log.info('📄 Reached last page (no next cursor)');
+                log.info('📄 Reached last page');
                 break;
             }
             cursor = nextCursor;
@@ -470,21 +435,11 @@ try {
         return apiTouched;
     };
 
-    // ===== FALLBACK: HTML Scraper with CheerioCrawler =====
+    // ===== FALLBACK: HTML Scraper =====
     const runHtmlFallback = async () => {
         log.warning('⚠️ Falling back to HTML parsing');
         const startUrls = extractStartUrls(input);
-        const baseUrl = startUrls.length ? startUrls[0] : DEFAULT_LIST_URL;
-        const listUrl = (() => {
-            try {
-                const url = new URL(baseUrl);
-                url.searchParams.set('orderBy', orderBy);
-                url.searchParams.set('sortBy', sortBy);
-                return url.href;
-            } catch {
-                return DEFAULT_LIST_URL;
-            }
-        })();
+        const listUrl = startUrls.length ? startUrls[0] : DEFAULT_LIST_URL;
 
         const crawler = new CheerioCrawler({
             proxyConfiguration,
@@ -494,16 +449,12 @@ try {
             requestHandlerTimeoutSecs: 60,
             async requestHandler({ request, $, enqueueLinks }) {
                 const label = request.userData?.label || 'LIST';
-                const pageNo = request.userData?.pageNo || 1;
 
                 if (label === 'LIST') {
                     const jsonLdUrls = extractListJsonLd($);
                     let urls = jsonLdUrls.length ? jsonLdUrls : extractJobUrlsFromHtml($);
-                    if (!urls.length && pageNo === 1) {
-                        urls = await fetchSitemapUrls();
-                    }
                     if (!urls.length) {
-                        log.warning(`No job URLs found at ${request.url}`);
+                        urls = await fetchSitemapUrls();
                     }
 
                     const remaining = Number.isFinite(maxItems) ? Math.max(0, maxItems - state.saved) : urls.length;

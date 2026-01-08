@@ -1,11 +1,10 @@
 {
   "keywords": "",
   "city": "",
-  "employmentTypes": [],
+  "workplaceTypes": [],
   "startUrls": [],
-  "maxItems": 20,
-  "maxPages": 5,
-  "pageSize": 25,
+  "maxItems": 10,
+  "maxPages": 2,
   "collectDetails": true,
   "proxyConfiguration": {
     "useApifyProxy": false

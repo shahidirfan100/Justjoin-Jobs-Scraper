@@ -1,64 +1,81 @@
 {
   "title": "JustJoin Jobs Scraper",
-  "description": "Extract job listings from JustJoin.it. Supports filtering by keyword, location, employment type, and more.",
+  "description": "Extract job listings from JustJoin.it - Poland's leading tech job board. Filter by keyword, location, and workplace preference.",
   "type": "object",
   "schemaVersion": 1,
   "properties": {
     "startUrls": {
-      "title": "Start URLs",
+      "title": "🔗 Start URLs",
       "type": "array",
-      "description": "JustJoin.it search URLs to scrape. If set, these will be processed via HTML fallback.",
+      "description": "Optionally provide specific JustJoin.it search URLs to scrape.",
       "editor": "requestListSources",
-      "example": [
+      "prefill": [
         {
-          "url": "https://justjoin.it/all-locations/javascript"
+          "url": "https://justjoin.it/job-offers/all-locations"
         }
       ],
       "default": []
     },
     "keywords": {
-      "title": "Search Keywords",
+      "title": "🔍 Search Keywords",
       "type": "string",
-      "description": "Job title or skills to search (e.g., 'React', 'Python', 'Frontend').",
+      "description": "Search term for job titles or skills (e.g., 'React', 'Python', 'DevOps').",
       "editor": "textfield",
-      "example": "React"
+      "prefill": ""
     },
     "city": {
-      "title": "City",
+      "title": "📍 City",
       "type": "string",
-      "description": "City to filter by (e.g., 'Warszawa', 'Kraków').",
+      "description": "Filter by city name (e.g., 'Warszawa', 'Kraków', 'Wrocław').",
       "editor": "textfield",
-      "example": "Warszawa"
+      "prefill": ""
+    },
+    "workplaceTypes": {
+      "title": "🏢 Workplace Type",
+      "type": "array",
+      "description": "Filter by work location preference.",
+      "editor": "select",
+      "items": {
+        "type": "string",
+        "enum": [
+          "remote",
+          "hybrid",
+          "office"
+        ]
+      },
+      "default": []
     },
     "collectDetails": {
-      "title": "Collect Full Job Details",
+      "title": "📝 Collect Full Details",
       "type": "boolean",
-      "description": "Visit each job detail page to extract complete descriptions and additional information.",
+      "description": "Fetch complete job descriptions and application links. Disable for faster listing-only scrapes.",
       "editor": "checkbox",
       "default": true
     },
     "maxItems": {
-      "title": "Maximum Jobs to Extract",
+      "title": "🔢 Maximum Jobs",
       "type": "integer",
-      "description": "Maximum number of job listings to collect.",
+      "description": "Maximum number of job listings to extract.",
       "minimum": 1,
+      "maximum": 10000,
       "default": 100,
-      "prefill": 100,
+      "prefill": 50,
       "editor": "number"
     },
     "maxPages": {
-      "title": "Maximum Pages",
+      "title": "📄 Maximum Pages",
       "type": "integer",
       "description": "Maximum number of result pages to process.",
       "minimum": 1,
+      "maximum": 100,
       "editor": "number",
       "default": 10,
       "prefill": 10
     },
     "proxyConfiguration": {
-      "title": "Proxy Configuration",
+      "title": "🌐 Proxy Configuration",
       "type": "object",
-      "description": "Recommended: Use Apify Proxy to avoid blocking.",
+      "description": "Enable Apify Proxy for better reliability and to avoid blocking.",
       "editor": "proxy",
       "default": {
         "useApifyProxy": true
