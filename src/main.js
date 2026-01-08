@@ -1,5 +1,4 @@
-import { Actor } from 'apify';
-import log from 'apify/log';
+import { Actor, log } from 'apify';
 import { CheerioCrawler } from 'crawlee';
 import { load as cheerioLoad } from 'cheerio';
 import { gotScraping } from 'got-scraping';
