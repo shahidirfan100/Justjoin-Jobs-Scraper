@@ -45,6 +45,40 @@ const cleanText = (html) => {
     return text || null;
 };
 
+// Clean HTML - strip CSS classes but keep semantic tags
+const cleanHtml = (html) => {
+    if (!html) return null;
+    const $ = cheerioLoad(String(html));
+    $('script, style, noscript, iframe').remove();
+    // Remove all class attributes
+    $('[class]').removeAttr('class');
+    // Remove all style attributes
+    $('[style]').removeAttr('style');
+    // Remove all id attributes
+    $('[id]').removeAttr('id');
+    // Remove all data attributes
+    $('*').each((_, el) => {
+        const attribs = $(el).attr();
+        if (attribs) {
+            Object.keys(attribs).forEach((attr) => {
+                if (attr.startsWith('data-')) $(el).removeAttr(attr);
+            });
+        }
+    });
+    return $.html().trim() || null;
+};
+
+// Simplify employment types - keep only essential fields
+const simplifyEmploymentTypes = (types) => {
+    if (!Array.isArray(types) || types.length === 0) return null;
+    return types.slice(0, 3).map((t) => ({
+        type: t?.type || null,
+        from: t?.from ?? t?.fromPerUnit ?? null,
+        to: t?.to ?? t?.toPerUnit ?? null,
+        currency: t?.currency ? String(t.currency).toUpperCase() : null,
+    })).filter((t) => t.type);
+};
+
 const mapSkills = (skills) => {
     if (!Array.isArray(skills)) return null;
     const items = skills
@@ -157,7 +191,7 @@ try {
         : undefined;
 
     // ===== CONFIGURATION =====
-    const maxItemsRaw = toInt(input.maxItems, 100);
+    const maxItemsRaw = toInt(input.maxItems, 50);
     const maxPages = Math.max(1, toInt(input.maxPages, 10));
     const pageSize = 100; // Fixed optimal page size
     const collectDetails = input.collectDetails !== false;
@@ -288,28 +322,17 @@ try {
             slug,
             title: detail?.title || offer?.title || null,
             company: detail?.companyName || offer?.companyName || null,
-            company_url: detail?.companyUrl || null,
             company_logo: detail?.companyLogoUrl || offer?.companyLogoThumbUrl || null,
             category: detail?.category?.key || offer?.category?.key || null,
             workplace_type: detail?.workplaceType || offer?.workplaceType || null,
-            working_time: detail?.workingTime || offer?.workingTime || null,
             experience: detail?.experienceLevel || offer?.experienceLevel || null,
             location: detail?.city || offer?.city || (detail?.locations?.length ? detail.locations[0].city : null) || null,
-            street: detail?.street || offer?.street || null,
             country_code: detail?.countryCode || null,
-            locations: detail?.locations || offer?.locations || null,
-            employment_types: employment,
+            employment_types: simplifyEmploymentTypes(employment),
             salary: summarizeSalary(employment),
             skills: mapSkills(detail?.requiredSkills || offer?.requiredSkills),
-            nice_to_have_skills: mapSkills(detail?.niceToHaveSkills || offer?.niceToHaveSkills),
-            languages: detail?.languages || offer?.languages || null,
-            is_remote_interview: detail?.isRemoteInterview ?? offer?.isRemoteInterview ?? null,
-            is_open_to_hire_ukrainians: detail?.isOpenToHireUkrainians ?? offer?.isOpenToHireUkrainians ?? null,
-            apply_url: detail?.applyUrl || null,
             date_posted: detail?.publishedAt || offer?.publishedAt || null,
-            last_published_at: detail?.lastPublishedAt || offer?.lastPublishedAt || null,
-            expired_at: detail?.expiredAt || offer?.expiredAt || null,
-            description_html: detail?.body || null,
+            description_html: cleanHtml(detail?.body) || null,
             description_text: detail?.body ? cleanText(detail.body) : null,
             url: buildOfferUrl(slug),
             source: 'justjoin.it',

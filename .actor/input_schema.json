@@ -9,11 +9,7 @@
       "type": "array",
       "description": "Optionally provide specific JustJoin.it search URLs to scrape.",
       "editor": "requestListSources",
-      "prefill": [
-        {
-          "url": "https://justjoin.it/job-offers/all-locations"
-        }
-      ],
+      "prefill": [],
       "default": []
     },
     "keywords": {
@@ -21,14 +17,16 @@
       "type": "string",
       "description": "Search term for job titles or skills (e.g., 'React', 'Python', 'DevOps').",
       "editor": "textfield",
-      "prefill": ""
+      "prefill": "",
+      "default": ""
     },
     "city": {
       "title": "📍 City",
       "type": "string",
       "description": "Filter by city name (e.g., 'Warszawa', 'Kraków', 'Wrocław').",
       "editor": "textfield",
-      "prefill": ""
+      "prefill": "",
+      "default": ""
     },
     "workplaceTypes": {
       "title": "🏢 Workplace Type",
@@ -43,6 +41,7 @@
           "office"
         ]
       },
+      "prefill": [],
       "default": []
     },
     "collectDetails": {
@@ -50,6 +49,7 @@
       "type": "boolean",
       "description": "Fetch complete job descriptions and application links. Disable for faster listing-only scrapes.",
       "editor": "checkbox",
+      "prefill": true,
       "default": true
     },
     "maxItems": {
@@ -58,8 +58,8 @@
       "description": "Maximum number of job listings to extract.",
       "minimum": 1,
       "maximum": 10000,
-      "default": 100,
       "prefill": 50,
+      "default": 50,
       "editor": "number"
     },
     "maxPages": {
@@ -69,18 +69,18 @@
       "minimum": 1,
       "maximum": 100,
       "editor": "number",
-      "default": 10,
-      "prefill": 10
+      "prefill": 10,
+      "default": 10
     },
     "proxyConfiguration": {
       "title": "🌐 Proxy Configuration",
       "type": "object",
       "description": "Enable Apify Proxy for better reliability and to avoid blocking.",
       "editor": "proxy",
-      "default": {
+      "prefill": {
         "useApifyProxy": true
       },
-      "prefill": {
+      "default": {
         "useApifyProxy": true
       }
     }

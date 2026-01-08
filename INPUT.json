@@ -1,12 +1,12 @@
 {
+  "startUrls": [],
   "keywords": "",
   "city": "",
   "workplaceTypes": [],
-  "startUrls": [],
-  "maxItems": 10,
-  "maxPages": 2,
   "collectDetails": true,
+  "maxItems": 50,
+  "maxPages": 10,
   "proxyConfiguration": {
-    "useApifyProxy": false
+    "useApifyProxy": true
   }
 }
